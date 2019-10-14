@@ -1,1 +1,483 @@
 # AngularPOC
+    <form #loginForm="ngForm" (ngSubmit)="submitLoginForm(loginForm)" style="background-color:beige;">
+      <div class="row">
+        <div class="col-md-4">
+        </div>
+        <div class="col-md-4">
+          <h2>Login</h2>
+          <h6 style="text-align:right;color:dimgrey;font-size:small">All fields are mandatory</h6>
+          <div class="form-group">
+            <div class="col" style="text-align:left">
+              <label>Email Id</label>
+            </div>
+            <div class="col; input-group" style="text-align:left">
+              <input type="email" name="email" #emailRef="ngModel" class="form-control" ngModel required pattern="^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$">
+            </div>
+            <div *ngIf="emailRef.errors && (emailRef.dirty || emailRef.touched)" style="text-align:left; padding-top:5px; color:red;">
+              <div [hidden]="!emailRef.errors.required">
+                <p>&nbsp;Email id is mandatory</p>
+              </div>
+              <div [hidden]="!emailRef.errors.pattern">
+                <p>&nbsp;Email id is not entered in proper format</p>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+              <div class="col" style="text-align:left" >
+                <label>Gender</label>
+              </div>
+              <div class="col; input-group">
+                <input type="radio" name="gender" value="male" > Male
+                <input type="radio" name="gender" value="female"> Female<br>
+              </div>
+          </div>
+          <div class="form-group">
+            <div class="col" style="text-align:left">
+              <label>Password</label>
+            </div>
+            <div class="col; input-group">
+              <input type="password" name="password" #passwordRef="ngModel" class="form-control" ngModel required> 
+            </div>
+            <div *ngIf="passwordRef.errors && (passwordRef.dirty || passwordRef.touched)" style="text-align:left; padding-top:5px; color:red;">
+              <div [hidden]="!passwordRef.errors.required">
+                <p>&nbsp;Password is mandatory</p>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+                <div class="col" style="text-align:left" >
+                  <label>Date of Birth</label>
+                </div>
+                <div class="col; input-group">
+                  <input type="date" name="dob" id="dob">
+
+                </div>
+            </div>
+          <div class="form-group"  style="text-align:left">
+            <button type="submit" [disabled]="!loginForm.form.valid" class="btn">Login</button>
+          </div>
+        </div>
+        <div class="col-md-4">
+        </div>
+      </div>
+    </form>
+  
+
+//post service
+ 
+import { Component, OnInit } from '@angular/core';
+import { NgForm } from '@angular/forms';
+import { UserService } from '../quickKart-services/user-service/user.service';
+import { Router } from '@angular/router';
+
+@Component({
+  selector: 'app-login',
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.css']
+})
+export class LoginComponent implements OnInit {
+
+  status: string;
+  errorMsg: string;
+  msg: string;
+  showDiv: boolean = false;
+
+  constructor(private _userService:UserService, private router: Router) { }
+
+  ngOnInit() {
+  }
+  submitLoginForm(form: NgForm) {
+    this._userService.validateCredentials(form.value.email, form.value.password).subscribe(
+      responseLoginStatus => {
+        this.status = responseLoginStatus;
+        this.showDiv = true;
+        if (this.status.toLowerCase() != "invalid credentials") {
+          this.msg = "Login Successful";
+          sessionStorage.setItem('userName', form.value.email);
+          sessionStorage.setItem('userRole', this.status);
+          this.router.navigate(['/home']);
+        }
+        else {
+          this.msg = this.status + ". Try again with valid credentials.";          
+        }
+      },
+      responseLoginError => {
+        this.errorMsg = responseLoginError;
+      },
+      () => console.log("SubmitLoginForm method executed successfully")
+    );
+  }
+}
+
+//get service
+
+import { Injectable } from '@angular/core';
+import { IProduct } from 'src/app/quickKart-interfaces/product';
+import { ICategory } from 'src/app/quickKart-interfaces/category';
+import { HttpClient,HttpErrorResponse  } from '@angular/common/http';
+import { Observable,throwError  } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductService {
+
+  constructor(private http: HttpClient) { }
+
+  products: IProduct[];
+  categories: ICategory[];
+
+  getProducts(): Observable<IProduct[]> {
+    // let tempVar = this.http.get<IProduct[]>('http://localhost:11990//api/Product/GetProducts');
+    let tempVar = this.http.get<IProduct[]>('src/app/quickKart-data/product.json').pipe(catchError(this.errorHandler));
+    return tempVar;
+  }
+  getProductCategories(): Observable<ICategory[]> {
+    // let tempVar = this.http.get<ICategory[]>('http://localhost:11990/api/Category/GetCategories');
+    let tempVar = this.http.get<ICategory[]>('src/app/quickKart-data/category.json').pipe(catchError(this.errorHandler));
+    return tempVar;
+  }
+  errorHandler(error: HttpErrorResponse) {
+    console.error(error);
+    return  throwError(error.message  ||  "Server Error");
+  } 
+}
+
+import { Component, OnInit } from '@angular/core';
+import { IProduct } from '../quickKart-interfaces/product';
+import {ICategory} from '../quickKart-interfaces/category';
+import { ProductService} from '../quickkart-services/product-service/product.service';
+
+@Component({
+  selector: 'app-view-products',
+  templateUrl: './view-products.component.html',
+  styleUrls: ['./view-products.component.css']
+})
+export class ViewProductsComponent implements OnInit {
+
+  products: IProduct[];
+  categories: ICategory[];
+  filteredProducts: IProduct[];
+  imageSrc: string;
+  productsearch: string;
+  showMsgDiv: boolean = false;
+  userRole: string;
+  customerLayout: boolean = false;
+  commonLayout: boolean = false;
+  
+  constructor(private _productService: ProductService) { 
+
+    this.userRole = sessionStorage.getItem('userRole');
+    if (this.userRole == "Customer") {
+      this.customerLayout = true;
+    }
+    else {
+      this.commonLayout = true;
+    }
+
+  }
+ 
+  ngOnInit() {
+/*//adding products in the product array
+    this.products = [
+      { "ProductId": "P101", "ProductName": "Lamborghini Gallardo Spyder", "CategoryId": 1, "Price": 18000000, "QuantityAvailable": 10 },
+      { "ProductId": "P102", "ProductName": "Audi A8", "CategoryId": 1, "Price": 1847000, "QuantityAvailable": 12 },
+      { "ProductId": "P103", "ProductName": "BMW Z4", "CategoryId": 1, "Price": 6890000, "QuantityAvailable": 10 },
+      { "ProductId": "P104", "ProductName": "Samsung Galaxy S4", "CategoryId": 3, "Price": 38800, "QuantityAvailable": 100 },
+      { "ProductId": "P105", "ProductName": "SatyaPaul Tie", "CategoryId": 2, "Price": 2400, "QuantityAvailable": 100 }
+    ]
+    this.categories = [
+      { "CategoryId": 1, "CategoryName": "Motors" },
+      { "CategoryId": 2, "CategoryName": "Fashion" },
+      { "CategoryId": 3, "CategoryName": "Electronics" }
+    ]*/
+    this.getProducts();
+    this.getProductCategories();
+//    this.products= this._productService.getProducts();
+//    this.categories= this._productService.getProductCategories();
+    if (this.products == null)
+    {
+      this.showMsgDiv = true;
+    }
+
+    this.filteredProducts = this.products;
+    this.imageSrc="src/app/quickKart-images/add-item.jpg";
+  }
+  getProducts() {
+    this._productService.getProducts().subscribe(
+      responseProductData => {
+        this.products = responseProductData;
+        this.filteredProducts = responseProductData;
+        this.showMsgDiv = false;
+      }
+    );
+  }
+  getProductCategories() {
+    this._productService.getProductCategories().subscribe(
+      responseCategoryData => this.categories = responseCategoryData
+    );
+  }
+
+  searchProductByCategory(categoryId: string) {
+    //alert("inside category");
+    this.filteredProducts = this.products;
+    if (categoryId == "0") {
+      this.filteredProducts = this.products;
+    }
+    else {
+      this.filteredProducts = this.filteredProducts.filter(prod => prod.CategoryId.toString() == categoryId);
+    }
+  }
+  searchProductByName() {
+    //alert("inside name");
+    //this.filteredProducts = this.products;
+    if(this.productsearch != ""){
+      this.filteredProducts = this.filteredProducts.filter(prod => prod.ProductName.toString().indexOf(this.productsearch)>=0);
+  }
+  }
+
+}
+
+
+<div *ngIf="commonLayout">
+  <app-common-layout></app-common-layout>
+</div>
+<div *ngIf="customerLayout">
+  <app-customer-layout></app-customer-layout>
+</div>
+<div style="text-align:center;">
+  <h1>View Products</h1>
+  <br />
+  <div class="row">       
+    <div class="col-md-2" style="text-align:left">
+        <label>Search:</label>
+    </div>
+    <div class="col-md-2" >
+      <input type="text" (change)="searchProductByName()" [(ngModel)]="productsearch"/>
+
+    </div>        
+
+      <div class="col-md-10" style="text-align:right">
+          <label>Filter products:</label>
+      </div>
+      <div class="col-md-2">
+          <select class="form-control" #categorydrop (change)="searchProductByCategory(categorydrop.value)">
+              <option value="0">All Categories</option>
+              <option *ngFor="let category of categories" value={{category.CategoryId}}>
+                  {{category.CategoryName}}
+              </option>
+          </select>
+      </div>        
+  </div>
+  <br />
+  <div class="table-responsive">
+      <table class="table" style="border:5px solid rgba(220,230,242,1);" *ngIf="filteredProducts && filteredProducts.length">
+          <tr style="background-color:rgba(220,230,242,1); font-size:12pt">
+              <th style="text-align:center">Product Id</th>
+              <th style="text-align:center">Product Name</th>
+              <th style="text-align:center">Category Id</th>
+              <th style="text-align:center">Price</th>
+              <th style="text-align:center">Quantity Available</th>
+              <th style="text-align:center">Action</th>
+          </tr>
+          <tr *ngFor="let product of filteredProducts" style="background-color:white">
+            <td>{{product.ProductId }}</td>
+            <td>{{product.ProductName}}</td>
+            <td>{{product.CategoryId}}</td>
+            <td>{{product.Price}}</td>
+            <td>{{product.QuantityAvailable}}</td>
+            <!--<td><button title="Add to cart">Add to Cart</button></td>-->
+            <td><img title="Add to cart" [src]="imageSrc"></td>
+          </tr>
+      </table>
+  </div>
+  
+    <div *ngIf="showMsgDiv" >
+      <h4 class="jumbotron" style="text-align:center;">No products available</h4>
+    </div>
+ 
+</div>
+
+//Routing
+
+<div>
+	<nav class='navbar navbar-default navbar-fixed-top'>
+		<div class='container-fluid'>
+			<ul class="social-network social-circle iconpos">
+				<li><a href="#" class="icoFacebook" title="Facebook"><i
+						class="fa fa-facebook fa-1x"></i></a></li>
+				<li class="divider-vertical"></li>
+				<li><a href="#" class="icoTwitter" title="Twitter"><i
+						class="fa fa-twitter fa-1x"></i></a></li>
+			</ul>
+
+			<ul class="nav navbar-nav navbar-right">
+				<li>
+					<div class="panel-heading text-right" style="display:none;padding:0px;position:relative;top:15px;" id="welcome">Welcome {{userName | titlecase}}</div></li>
+				<li class="divider-vertical"></li>
+				<li>
+					<div class="btn-nav" style="padding-right:15px">
+						<a id="login" class="btn btn-primary btn-small navbar-btn" (click)="login()">{{loginTitle}}</a>
+					</div>
+				</li>
+			</ul>
+		</div>
+	</nav>
+
+	<router-outlet></router-outlet>
+
+</div>
+
+import { NgModule } from '@angular/core';
+import { Routes, RouterModule } from '@angular/router';
+
+import { WelcomeComponent } from './welcome/welcome.component';
+import { LoginComponent } from './login/login.component';
+
+const appRoutes: Routes = [
+  { path: 'welcome', component: WelcomeComponent },
+  { path: 'login', component: LoginComponent },
+  { path: 'products', loadChildren: 'src/app/products/products.module#ProductsModule' },
+  { path: '', redirectTo: '/welcome', pathMatch: 'full' }
+
+];
+
+@NgModule({
+  imports: [
+    RouterModule.forRoot(appRoutes)
+  ],
+  exports: [
+    RouterModule
+  ]
+})
+export class AppRoutingModule { }
+
+
+//pipes
+
+import { Pipe, PipeTransform } from '@angular/core';
+import { Product } from '../product';
+
+@Pipe({
+  name: 'orderBy'
+})
+export class OrderByPipe implements PipeTransform {
+
+  transform(value: Product[], args: string): Product[] {
+    if (args === 'popularity') {
+        return value.sort((a: any, b: any) => {
+            if (a.rating > b.rating) {
+                return -1;
+            } else if (a.rating < b.rating) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
+    } else if (args === 'pricelh') {
+        return value.sort((a: any, b: any) => {
+            if (a.price < b.price) {
+                return -1;
+            } else if (a.price > b.price) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
+
+    } else if (args === 'pricehl') {
+        return value.sort((a: any, b: any) => {
+            if (a.price > b.price) {
+                return -1;
+            } else if (a.price < b.price) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
+    }
+    return value;
+  }
+}
+
+//app-rating
+
+import { Component, Input, Output, EventEmitter } from '@angular/core';
+
+@Component({
+  selector: 'app-rating',
+  template: `
+      <span *ngFor="let r of range; let i = index">
+        <i class="glyphicon" [ngClass]="i < rate ? 'glyphicon-star' : 'glyphicon-star-empty'"></i>
+      </span>
+  `
+})
+export class RatingComponent {
+  range: Array<number> = [1, 2, 3, 4, 5];
+  @Input() rate: number;
+}
+
+
+//Reactive form
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+@Component({
+  selector: 'app-registration-form',
+  templateUrl: './registration-form.component.html',
+  styleUrls: ['./registration-form.component.css']
+})
+export class RegistrationFormComponent implements OnInit {
+  registerForm: FormGroup;
+  constructor(private formBuilder: FormBuilder) { }
+  ngOnInit() {
+    this.registerForm = this.formBuilder.group({
+      firstName: ['', Validators.required],
+      lastName: ['', Validators.required],
+      address: this.formBuilder.group({
+        street: [],
+        zip: [],
+        city: []
+      })
+    });
+  }
+}
+ 
+
+
+<div class="container">
+  <h1>Registration Form</h1>
+  <form [formGroup]="registerForm">
+    <div class="form-group">
+      <label>First Name</label>
+      <input type="text" class="form-control" formControlName="firstName">
+      <p *ngIf="registerForm.controls.firstName.errors" class="alert alert-danger">This field is required!</p>
+    </div>
+    <div class="form-group">
+      <label>Last Name</label>
+      <input type="text" class="form-control" formControlName="lastName">
+      <p *ngIf="registerForm.controls.lastName.errors" class="alert alert-danger">This field is required!</p>
+    </div>
+    <div class="form-group">
+      <fieldset formGroupName="address">
+        <label>Street</label>
+        <input type="text" class="form-control" formControlName="street">
+        <label>Zip</label>
+        <input type="text" class="form-control" formControlName="zip">
+        <label>City</label>
+        <input type="text" class="form-control" formControlName="city">
+      </fieldset>
+    </div>
+    <button type="submit" (click)="submitted=true">Submit</button>
+  </form>
+<br/>
+  <div [hidden]="!submitted">
+    <h3> Employee Details </h3>
+    <p>First Name: {{ registerForm.get('firstName').value }} </p>
+    <p> Last Name: {{ registerForm.get('lastName').value }} </p>
+    <p> Street: {{ registerForm.get('address.street').value }}</p>
+    <p> Zip: {{ registerForm.get('address.zip').value }} </p>
+    <p> City: {{ registerForm.get('address.city').value }}</p>
+  </div>
+</div>
+ 
